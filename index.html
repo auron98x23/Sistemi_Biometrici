@@ -2,16 +2,17 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI Quiz Master Pro</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="reveal-mode">
+<body class="reveal-mode"> 
 
 <div class="container">
+    
     <div class="header-top">
-        <h1>AI Quiz Master <span id="quiz-range-label">(Caricamento...)</span></h1>
-        <button class="theme-toggle" onclick="toggleTheme()">
+        <h1>AI Quiz Master <span id="quiz-range-label">(1-283)</span></h1>
+        <button class="theme-toggle" onclick="window.toggleTheme()" title="Cambia Tema">
             <span id="theme-icon">☀️</span>
         </button>
     </div>
@@ -20,49 +21,67 @@
         <div id="login-form" class="login-row">
             <input type="text" id="username-input" placeholder="Username">
             <input type="password" id="password-input" placeholder="Password">
-            <button id="btn-login" class="btn-action btn-login">Accedi</button>
-            <button id="btn-register" class="btn-action btn-reg">Registrati</button>
+            <button class="btn-action btn-login" onclick="window.login()">Accedi</button>
+            <button class="btn-action btn-reg" onclick="window.register()">Registrati</button>
         </div>
         <div id="user-info" class="user-row" style="display:none;">
-            <span>Ciao, <b id="user-display-name"></b></span>
-            <button id="btn-logout" class="btn-action btn-logout">Esci</button>
+            <span>Ciao, <b id="user-display-name">User</b></span>
+            <button class="btn-action btn-logout" onclick="window.logout()">Esci</button>
         </div>
     </div>
 
     <div class="score-box">
-        <div class="stat">Punti: <span id="score">0</span></div>
-        <div class="stat">Errori: <span id="errors">0</span></div>
-        <div class="stat">Voto: <span id="grade">0.0</span>/30</div>
+        <div class="score-item">✅ Punti: <span id="score">0</span> / <span id="total-visible">0</span></div>
+        <div class="score-item error-text">❌ Errori: <span id="errors">0</span></div>
+        <div class="score-item grade-text">🎓 Voto: <span id="grade">0.0</span></div>
     </div>
 
-    <div class="controls-grid">
-        <div class="control-group">
-            <label>Blocchi Domande:</label>
-            <div id="filter-container" class="filter-chips"></div>
-        </div>
-        <div class="control-group">
-            <label>Ordine Domande:</label>
-            <select id="mode-q"><option value="ordered">Sequenziale</option><option value="random">Casuale</option></select>
-        </div>
-        <div class="control-group">
-            <label>Modalità Cloud:</label>
-            <button id="btn-cloud-toggle" class="btn-cloud">Solo Errori Cloud: OFF</button>
+    <button id="btn-cloud-history" class="btn-cloud" style="display:none;" onclick="window.startCloudReview()">
+        ☁️ Carica Errori dal Cloud (0)
+    </button>
+
+    <div class="control-group">
+        <span class="group-label">Blocchi Domande (50 per blocco)</span>
+        <div id="filter-buttons-container" class="btn-row"></div>
+        
+        <div class="custom-range-wrapper" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+            <div style="margin-top: 10px; display: flex; gap: 15px; flex-wrap: wrap;">
+                <label class="chk-wrapper"><input type="checkbox" id="chk-ids" checked onchange="window.toggleIds(this)"> Mostra #ID</label>
+                <label class="chk-wrapper"><input type="checkbox" id="chk-reveal" checked onchange="window.toggleReveal(this)"> Rivela dopo risposta</label>
+            </div>
         </div>
     </div>
 
-    <div id="error-panel" class="error-panel" style="display:none;">
-        <p>Domande errate:</p>
-        <div id="error-list"></div>
+    <div class="control-group">
+        <div class="btn-row">
+            <div style="flex:1">
+                <span class="group-label">Ordine Domande</span>
+                <button class="btn-mode active" id="mode-q-ord" onclick="window.setQMode('ordered')">🔢 Ordine</button>
+                <button class="btn-mode" id="mode-q-rand" onclick="window.setQMode('random')">🔀 Random</button>
+            </div>
+            <div style="flex:1">
+                <span class="group-label">Ordine Risposte</span>
+                <button class="btn-mode active" id="mode-a-ord" onclick="window.setAMode('ordered')">ABC</button>
+                <button class="btn-mode" id="mode-a-rand" onclick="window.setAMode('random')">🔀 Mix</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="btn-row" style="margin-top: 20px;">
+        <button class="btn-reset" style="background-color: var(--text-secondary); color: white; flex:1;" onclick="window.resetProgress()">🗑️ Reset Sessione</button>
     </div>
 
-    <div id="quiz-container"></div>
-    <button id="btn-back-to-top">↑</button>
+    <div id="quiz-container" style="margin-top: 30px;">
+        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Caricamento database...</p>
+    </div>
 </div>
+
+<button onclick="window.scrollToTop()" id="btn-back-to-top" class="btn-top">⬆️</button>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, increment } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, increment, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyA7tsfHv64JlJRB7rrWHgmT786f-jwcU-c",
@@ -76,174 +95,200 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const FAKE_DOMAIN = "@quiz.app"; 
 
-    let fullDb = [], activeBlocks = [1], currentQuizSet = [];
-    let score = 0, errors = 0, currentUser = null;
-    let cloudErrorIds = [], isCloudMode = false, currentSelections = {};
+    let fullDb = [];
+    let activeBlocks = [1];
+    const BLOCK_SIZE = 50;
+    let score = 0, errors = 0;
+    let currentUser = null, cloudErrorIds = new Set(), cloudErrorCounts = {};
+    let modeQ = 'ordered', modeA = 'ordered', isCloudMode = false;
+    let currentSelections = {}; 
 
-    // --- Caricamento Dati ---
+    // --- UI & THEME ---
+    window.toggleTheme = () => {
+        document.body.classList.toggle('amoled-mode');
+        const isDark = document.body.classList.contains('amoled-mode');
+        document.getElementById('theme-icon').innerText = isDark ? '🌙' : '☀️';
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    };
+    if (localStorage.getItem('theme') === 'dark') window.toggleTheme();
+
+    window.toggleIds = (cb) => document.body.classList.toggle('hide-numbers', !cb.checked);
+    window.toggleReveal = (cb) => document.body.classList.toggle('reveal-mode', cb.checked);
+    window.scrollToTop = () => window.scrollTo({top: 0, behavior: 'smooth'});
+
+    // --- AUTH ---
+    window.login = () => {
+        const u = document.getElementById('username-input').value;
+        const p = document.getElementById('password-input').value;
+        signInWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).catch(() => alert("Login fallito"));
+    };
+    window.register = () => {
+        const u = document.getElementById('username-input').value;
+        const p = document.getElementById('password-input').value;
+        createUserWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).catch(e => alert(e.message));
+    };
+    window.logout = () => signOut(auth).then(() => location.reload());
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUser = user;
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('user-info').style.display = 'flex';
+            document.getElementById('user-display-name').innerText = user.email.split('@')[0];
+            document.getElementById('btn-cloud-history').style.display = 'block';
+            await loadCloudErrors();
+        }
+    });
+
+    // --- CLOUD LOGIC ---
+    async function loadCloudErrors() {
+        if (!currentUser) return;
+        const snap = await getDoc(doc(db, "users", currentUser.uid));
+        if (snap.exists()) {
+            const data = snap.data();
+            cloudErrorIds = new Set(data.errorIds || []);
+            cloudErrorCounts = data.errorCounts || {};
+            document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
+        }
+    }
+
+    async function addErrorToCloud(qId) {
+        if (!currentUser) return;
+        const qIdStr = String(qId);
+        await updateDoc(doc(db, "users", currentUser.uid), {
+            errorIds: arrayUnion(parseInt(qId)),
+            [`errorCounts.${qIdStr}`]: increment(1)
+        }).catch(async () => {
+            await setDoc(doc(db, "users", currentUser.uid), { errorIds: [parseInt(qId)], errorCounts: { [qIdStr]: 1 } });
+        });
+    }
+
+    window.manualRemove = async (qId) => {
+        const block = document.getElementById(`q-${qId}`);
+        if(block) { block.style.opacity = '0'; setTimeout(() => block.remove(), 400); }
+        cloudErrorIds.delete(parseInt(qId));
+        await updateDoc(doc(db, "users", currentUser.uid), {
+            errorIds: arrayRemove(parseInt(qId)),
+            [`errorCounts.${String(qId)}`]: deleteField()
+        });
+    };
+
+    window.startCloudReview = () => { isCloudMode = true; activeBlocks = []; regenerateQuiz(); };
+
+    // --- ENGINE ---
     async function loadQuestions() {
         try {
             const res = await fetch('questions.json');
             const data = await res.json();
-            fullDb = Object.keys(data).map(id => ({
-                id: parseInt(id),
-                q: data[id].domanda,
-                options: data[id].risposte,
-                correct: Array.isArray(data[id].giusta) ? data[id].giusta : [] 
+            fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => ({
+                id: parseInt(k),
+                q: data[k].domanda,
+                options: data[k].risposte,
+                correct: Array.isArray(data[k].giusta) ? data[k].giusta : [data[k].giusta]
             })).sort((a,b) => a.id - b.id);
-            
+
             setupFilters();
             regenerateQuiz();
-        } catch (e) {
-            document.getElementById('quiz-container').innerHTML = `<div class="error">Errore critico: Il file JSON non è nel formato corretto [Indici numerici richiesti].</div>`;
-        }
+        } catch(e) { document.getElementById('quiz-container').innerHTML = "Errore database."; }
     }
 
     function setupFilters() {
-        const container = document.getElementById('filter-container');
-        const total = fullDb.length;
-        const numBlocks = Math.ceil(total / 50);
+        const container = document.getElementById('filter-buttons-container');
         container.innerHTML = '';
-        for(let i=1; i<=numBlocks; i++) {
+        const blocks = Math.ceil(fullDb.length / BLOCK_SIZE);
+        for(let i=1; i<=blocks; i++) {
             const btn = document.createElement('button');
-            btn.innerText = `B${i}`;
-            btn.className = activeBlocks.includes(i) ? 'chip active' : 'chip';
+            btn.className = `btn-block ${activeBlocks.includes(i) ? 'active' : ''}`;
+            btn.innerText = `${(i-1)*BLOCK_SIZE+1}-${Math.min(i*BLOCK_SIZE, fullDb.length)}`;
             btn.onclick = () => {
-                activeBlocks.includes(i) ? activeBlocks = activeBlocks.filter(b => b!==i) : activeBlocks.push(i);
-                setupFilters();
+                isCloudMode = false;
+                if(activeBlocks.includes(i)) activeBlocks = activeBlocks.filter(b => b !== i);
+                else activeBlocks.push(i);
+                document.querySelectorAll('.btn-block').forEach((b, idx) => b.classList.toggle('active', activeBlocks.includes(idx+1)));
                 regenerateQuiz();
             };
             container.appendChild(btn);
         }
     }
 
+    window.setQMode = (m) => { modeQ = m; document.getElementById('mode-q-ord').classList.toggle('active', m==='ordered'); document.getElementById('mode-q-rand').classList.toggle('active', m==='random'); regenerateQuiz(); };
+    window.setAMode = (m) => { modeA = m; document.getElementById('mode-a-ord').classList.toggle('active', m==='ordered'); document.getElementById('mode-a-rand').classList.toggle('active', m==='random'); regenerateQuiz(); };
+
     function regenerateQuiz() {
+        let list = isCloudMode ? fullDb.filter(q => cloudErrorIds.has(q.id)) : [];
+        if(!isCloudMode) {
+            activeBlocks.forEach(b => {
+                const start = (b-1)*BLOCK_SIZE;
+                list = list.concat(fullDb.slice(start, start + BLOCK_SIZE));
+            });
+        }
+        
+        let processed = JSON.parse(JSON.stringify(list));
+        if(modeQ === 'random') processed.sort(() => Math.random() - 0.5);
+        if(modeA === 'random') {
+            processed.forEach(q => {
+                let mapping = q.options.map((text, i) => ({ text, i }));
+                mapping.sort(() => Math.random() - 0.5);
+                q.options = mapping.map(m => m.text);
+                q.correct = q.correct.map(oldIdx => mapping.findIndex(m => m.i === oldIdx));
+            });
+        }
+        render(processed);
+    }
+
+    function render(list) {
         const container = document.getElementById('quiz-container');
         container.innerHTML = '';
+        document.getElementById('total-visible').innerText = list.length;
+        document.getElementById('quiz-range-label').innerText = `(1-${fullDb.length})`;
         currentSelections = {};
-        
-        // Filtro blocchi o Cloud
-        let filtered = isCloudMode 
-            ? fullDb.filter(q => cloudErrorIds.includes(q.id))
-            : fullDb.filter(q => activeBlocks.includes(Math.ceil(q.id / 50)));
 
-        if(document.getElementById('mode-q').value === 'random') {
-            filtered.sort(() => Math.random() - 0.5);
-        }
-
-        currentQuizSet = filtered;
-        filtered.forEach(renderQuestion);
-        updateStats();
+        list.forEach(q => {
+            const div = document.createElement('div');
+            div.className = 'question-block'; div.id = `q-${q.id}`;
+            const count = cloudErrorCounts[String(q.id)] || 0;
+            const spoiler = cloudErrorIds.has(q.id) ? `<div class="post-answer-reveal"><span class="count-badge">❌ ${count}</span><button class="btn-remove-cloud" onclick="window.manualRemove(${q.id})">Rimuovi</button></div>` : '';
+            div.innerHTML = `<div class="q-header"><div><span class="q-badge">#${q.id}</span> <b>${q.q}</b></div></div><div class="options"></div>${spoiler}`;
+            q.options.forEach((opt, i) => {
+                const btn = document.createElement('div');
+                btn.className = 'option-label'; btn.innerText = opt;
+                btn.onclick = () => handleAnswer(q.id, i, q.correct, btn, div);
+                div.querySelector('.options').appendChild(btn);
+            });
+            container.appendChild(div);
+        });
     }
 
-    function renderQuestion(q) {
-        const div = document.createElement('div');
-        div.className = 'question-card';
-        div.id = `q-${q.id}`;
-        div.innerHTML = `
-            <div class="q-header">Domanda ${q.id}</div>
-            <div class="q-text">${q.q}</div>
-            <div class="options-list">
-                ${q.options.map((opt, i) => `
-                    <div class="option-label" onclick="window.checkAns(${q.id}, ${i}, ${JSON.stringify(q.correct)}, this)">
-                        ${opt}
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        document.getElementById('quiz-container').appendChild(div);
-    }
-
-    window.checkAns = async (qId, selIndex, correctIndices, el) => {
-        const parent = el.parentElement;
+    function handleAnswer(qId, sel, corr, el, parent) {
         if(parent.classList.contains('answered')) return;
-
         if(!currentSelections[qId]) currentSelections[qId] = [];
-
-        if(correctIndices.includes(selIndex)) {
-            if(!currentSelections[qId].includes(selIndex)) {
+        
+        if(corr.includes(sel)) {
+            if(!currentSelections[qId].includes(sel)) {
                 el.classList.add('correct');
-                currentSelections[qId].push(selIndex);
-                if(currentSelections[qId].length === correctIndices.length) {
-                    parent.classList.add('answered');
-                    score++;
-                    updateStats();
+                currentSelections[qId].push(sel);
+                if(currentSelections[qId].length === corr.length) {
+                    parent.classList.add('answered'); score++; updateStats();
                 }
             }
         } else {
-            el.classList.add('wrong');
-            parent.classList.add('answered');
-            errors++;
-            correctIndices.forEach(idx => parent.children[idx].classList.add('correct'));
+            el.classList.add('wrong'); parent.classList.add('answered'); errors++;
+            parent.querySelectorAll('.option-label').forEach((o, i) => { if(corr.includes(i)) o.classList.add('correct'); });
             if(currentUser) addErrorToCloud(qId);
             updateStats();
         }
-    };
-
-    async function addErrorToCloud(qId) {
-        const userRef = doc(db, "users", currentUser.uid);
-        await updateDoc(userRef, {
-            errorIds: arrayUnion(qId),
-            [`errorCounts.${qId}`]: increment(1)
-        }).catch(() => setDoc(userRef, { errorIds: [qId], errorCounts: { [qId]: 1 } }));
     }
 
     function updateStats() {
         document.getElementById('score').innerText = score;
         document.getElementById('errors').innerText = errors;
-        const total = currentQuizSet.length || 1;
-        document.getElementById('grade').innerText = ((score/total)*30).toFixed(1);
+        const total = parseInt(document.getElementById('total-visible').innerText) || 1;
+        document.getElementById('grade').innerText = ((score / total) * 30).toFixed(1);
     }
 
-    // --- Auth Logic ---
-    onAuthStateChanged(auth, async (user) => {
-        if(user) {
-            currentUser = user;
-            document.getElementById('login-form').style.display = 'none';
-            document.getElementById('user-info').style.display = 'flex';
-            document.getElementById('user-display-name').innerText = user.email.split('@')[0];
-            const snap = await getDoc(doc(db, "users", user.uid));
-            if(snap.exists()) cloudErrorIds = snap.data().errorIds || [];
-        } else {
-            currentUser = null;
-            document.getElementById('login-form').style.display = 'flex';
-            document.getElementById('user-info').style.display = 'none';
-        }
-    });
-
-    document.getElementById('btn-login').onclick = () => {
-        const email = document.getElementById('username-input').value + "@quiz.app";
-        const pass = document.getElementById('password-input').value;
-        signInWithEmailAndPassword(auth, email, pass);
-    };
-
-    document.getElementById('btn-register').onclick = () => {
-        const email = document.getElementById('username-input').value + "@quiz.app";
-        const pass = document.getElementById('password-input').value;
-        createUserWithEmailAndPassword(auth, email, pass);
-    };
-
-    document.getElementById('btn-logout').onclick = () => signOut(auth);
-
-    document.getElementById('btn-cloud-toggle').onclick = (e) => {
-        isCloudMode = !isCloudMode;
-        e.target.innerText = `Solo Errori Cloud: ${isCloudMode ? 'ON' : 'OFF'}`;
-        e.target.style.background = isCloudMode ? '#ff4444' : '#444';
-        regenerateQuiz();
-    };
-
-    window.toggleTheme = () => {
-        const body = document.body;
-        if(body.getAttribute('data-theme') === 'dark') {
-            body.removeAttribute('data-theme');
-            document.getElementById('theme-icon').innerText = '☀️';
-        } else {
-            body.setAttribute('data-theme', 'dark');
-            document.getElementById('theme-icon').innerText = '🌙';
-        }
-    };
-
+    window.resetProgress = () => location.reload();
     loadQuestions();
 </script>
 </body>
