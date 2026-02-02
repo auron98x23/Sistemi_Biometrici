@@ -1,8 +1,4 @@
-Per rimpiazzare il database precedente con le nuove domande fornite nel file `quizzes_sisbio.json` e mantenere la compatibilità con il tuo codice JavaScript (che richiede un oggetto con chiavi numeriche, campo `domanda`, `risposte` e `giusta`), ecco il file `questions.json` aggiornato.
 
-Ho estratto tutte le domande dai 6 quiz del file originale, numerandole progressivamente.
-
-```json
 {
   "1": {
     "domanda": "L'operazione che associa un'identità a un individuo può essere distinta in 'autenticazione' e 'identificazione'.",
@@ -1421,4 +1417,3 @@ Ho estratto tutte le domande dai 6 quiz del file originale, numerandole progress
   }
 }
 
-```
