@@ -9,7 +9,6 @@
 <body class="reveal-mode"> 
 
 <div class="container">
-    
     <div class="header-top">
         <h1>AI Quiz Master <span id="quiz-range-label">(1-283)</span></h1>
         <button class="theme-toggle" onclick="window.toggleTheme()" title="Cambia Tema (AMOLED)">
@@ -24,7 +23,6 @@
             <button id="btn-login" class="btn-action btn-login" onclick="window.login()">Accedi</button>
             <button id="btn-register" class="btn-action btn-reg" onclick="window.register()">Registrati</button>
         </div>
-
         <div id="user-info" class="user-row">
             <span>Ciao, <b id="user-display-name">User</b></span>
             <button id="btn-logout" class="btn-action btn-logout" onclick="window.logout()">Esci</button>
@@ -37,50 +35,44 @@
         <div class="score-item grade-text">🎓 Voto: <span id="grade">0.0</span></div>
     </div>
 
-    <button id="btn-cloud-history" class="btn-cloud" onclick="window.startCloudReview()">
-        ☁️ Carica Errori dal Cloud (0)
-    </button>
+    <div style="margin-bottom: 20px;">
+        <button id="btn-cloud-history" class="btn-cloud" onclick="window.startCloudReview()">
+            ☁️ Carica Errori dal Cloud (0)
+        </button>
+    </div>
 
     <div id="error-panel" class="error-panel">
-        <span class="error-label">Domande Errate Sessione:</span>
+        <span class="error-label">Domande Errate Sessione Corrente:</span>
         <div id="error-list" class="error-list"></div>
     </div>
 
     <div class="control-group">
-        <span class="group-label">Blocchi Domande (50 per blocco)</span>
+        <span class="group-label">Seleziona Quiz (SisBio)</span>
         <div id="filter-buttons-container" class="btn-row"></div>
         
         <div class="custom-range-wrapper" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-            <span class="group-label">Ricerca Rapida</span>
+            <span class="group-label">Range / ID Specifici</span>
             <div class="custom-range-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <input type="number" id="start-range" placeholder="Da" style="max-width: 60px;">
                 <input type="number" id="end-range" placeholder="A" style="max-width: 60px;">
                 <button class="btn-block" onclick="window.applyCustomRange()">Vai</button>
                 <span style="margin:0 8px; color:var(--text-secondary);">|</span>
-                <input type="text" id="specific-ids" placeholder="ID (es: 1,5,20)" style="flex:2;">
-                <button class="btn-block" onclick="window.applySpecificIds()">Cerca</button>
+                <input type="text" id="specific-ids" placeholder="Es: 2,4,10" style="flex:2;">
+                <button class="btn-block" onclick="window.applySpecificIds()">Cerca ID</button>
             </div>
             
-            <div style="margin-top: 10px; display: flex; gap: 15px; flex-wrap: wrap;">
+            <div style="margin-top: 10px;">
                 <label class="chk-wrapper"><input type="checkbox" id="chk-ids" checked onchange="window.toggleIds(this)"> Mostra #ID</label>
-                <label class="chk-wrapper"><input type="checkbox" id="chk-reveal" checked onchange="window.toggleReveal(this)"> Rivela dopo risposta</label>
+                <label class="chk-wrapper" style="margin-left: 15px;"><input type="checkbox" id="chk-reveal" checked onchange="window.toggleReveal(this)"> Rivela dopo risposta</label>
             </div>
         </div>
     </div>
 
     <div class="control-group">
-        <span class="group-label">Ordine Domande</span>
-        <div class="btn-row modes-row">
-            <button class="btn-mode btn-block" id="q-rand" onclick="window.setQMode('random')">🔀 D. Random</button>
-            <button class="btn-mode btn-block active" id="q-ord" onclick="window.setQMode('ordered')">🔢 D. Ordine</button>
-        </div>
-    </div>
-
-    <div class="control-group">
-        <span class="group-label">Ordine Risposte</span>
-        <div class="btn-row modes-row">
-            <button class="btn-mode btn-block" id="a-rand" onclick="window.setAMode('random')">🔀 R. Random</button>
-            <button class="btn-mode btn-block active" id="a-ord" onclick="window.setAMode('ordered')">ABC R. Ordine</button>
+        <span class="group-label">Modalità Domande</span>
+        <div class="btn-row">
+            <button class="btn-mode btn-block" id="q-rand" onclick="window.setQMode('random')">🔀 Casuale</button>
+            <button class="btn-mode btn-block active" id="q-ord" onclick="window.setQMode('ordered')">🔢 Ordine Seriale</button>
         </div>
     </div>
     
@@ -90,18 +82,17 @@
     </div>
 
     <div id="quiz-container" style="margin-top: 30px;">
-        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Caricamento...</p>
+        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Caricamento database...</p>
     </div>
 </div>
 
-<button onclick="window.scrollToTop()" id="btn-back-to-top" class="btn-top">⬆️</button>
+<button onclick="window.scrollToTop()" id="btn-back-to-top" class="btn-top" title="Torna su">⬆️</button>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, increment, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, increment, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // --- CONFIG FIREBASE ---
     const firebaseConfig = {
         apiKey: "AIzaSyA7tsfHv64JlJRB7rrWHgmT786f-jwcU-c",
         authDomain: "testdomande-e5950.firebaseapp.com",
@@ -118,11 +109,19 @@
 
     let fullDb = [];
     let activeBlocks = [1];
-    const BLOCK_SIZE = 50;
     let score = 0, errors = 0;
     let currentUser = null, cloudErrorIds = new Set(), cloudErrorCounts = {};
-    let modeQ = 'ordered', modeA = 'ordered', isCloudMode = false;
-    let currentSelections = {}; // Per gestire risposte multiple
+    let modeQ = 'ordered', isCloudMode = false;
+    let currentSelections = {};
+
+    const QUIZ_RANGES = [
+        { name: "Quiz 1", start: 1, end: 50 },
+        { name: "Quiz 2", start: 51, end: 101 },
+        { name: "Quiz 3", start: 102, end: 152 },
+        { name: "Quiz 4", start: 153, end: 203 },
+        { name: "Quiz 5", start: 204, end: 254 },
+        { name: "Quiz 6", start: 255, end: 283 }
+    ];
 
     // --- TEMA E UI ---
     window.toggleTheme = () => {
@@ -145,8 +144,8 @@
     window.register = () => {
         const u = document.getElementById('username-input').value;
         const p = document.getElementById('password-input').value;
-        if(!u || p.length < 6) return alert("Inserisci username e password (min 6 car.)");
-        createUserWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).catch(e => alert(e.message));
+        if(!u || p.length < 6) return alert("Username richiesto e Password min. 6 caratteri");
+        createUserWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).then(() => alert("Registrato!")).catch(e => alert(e.message));
     };
     window.login = () => {
         const u = document.getElementById('username-input').value;
@@ -169,87 +168,172 @@
     // --- CLOUD LOGIC ---
     async function loadCloudErrors() {
         if (!currentUser) return;
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const snap = await getDoc(userDocRef);
+        const snap = await getDoc(doc(db, "users", currentUser.uid));
         if (snap.exists()) {
             const data = snap.data();
             cloudErrorIds = new Set(data.errorIds || []);
             cloudErrorCounts = data.errorCounts || {};
+            updateCloudBtn();
         } else {
-            await setDoc(userDocRef, { errorIds: [], errorCounts: {} });
+            await setDoc(doc(db, "users", currentUser.uid), { errorIds: [], errorCounts: {} });
         }
+    }
+
+    function updateCloudBtn() {
         document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
     }
 
     async function addErrorToCloud(qId) {
         if (!currentUser) return;
-        const userDocRef = doc(db, "users", currentUser.uid);
-        qId = String(qId);
-        
-        cloudErrorIds.add(parseInt(qId));
-        cloudErrorCounts[qId] = (cloudErrorCounts[qId] || 0) + 1;
-
-        await updateDoc(userDocRef, {
-            errorIds: arrayUnion(parseInt(qId)),
-            [`errorCounts.${qId}`]: increment(1)
+        const qIdStr = String(qId);
+        cloudErrorIds.add(qId);
+        cloudErrorCounts[qIdStr] = (cloudErrorCounts[qIdStr] || 0) + 1;
+        updateCloudBtn();
+        await updateDoc(doc(db, "users", currentUser.uid), {
+            errorIds: arrayUnion(qId),
+            [`errorCounts.${qIdStr}`]: increment(1)
         });
-        document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
     }
+
+    window.manualRemove = async (qId) => {
+        const block = document.getElementById(`q-${qId}`);
+        if(block) { block.style.opacity = '0'; setTimeout(() => block.remove(), 500); }
+        cloudErrorIds.delete(qId);
+        delete cloudErrorCounts[String(qId)];
+        updateCloudBtn();
+        await updateDoc(doc(db, "users", currentUser.uid), {
+            errorIds: arrayRemove(qId),
+            [`errorCounts.${qId}`]: deleteField()
+        });
+    };
+
+    window.startCloudReview = () => { isCloudMode = true; regenerateQuiz(); };
 
     // --- ENGINE ---
     async function loadQuestions() {
-        const files = ['questions.json', 'questions(2).json'];
-        let data = null;
-        for (const file of files) {
-            try {
-                const res = await fetch(file);
-                if (res.ok) { data = await res.json(); break; }
-            } catch (e) {}
+        try {
+            const res = await fetch('questions.json');
+            const data = await res.json();
+            fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => {
+                const item = data[k];
+                return {
+                    id: parseInt(k),
+                    q: item.domanda,
+                    options: item.risposte,
+                    // Gestione risposte multiple (trasforma in array se stringa)
+                    correct: Array.isArray(item.giusta) ? 
+                        item.giusta.map(g => item.risposte.indexOf(g)) : 
+                        [item.risposte.indexOf(item.giusta)]
+                };
+            }).sort((a,b) => a.id - b.id);
+
+            setupFilters();
+            regenerateQuiz();
+        } catch(e) {
+            document.getElementById('quiz-container').innerHTML = "Errore caricamento database.";
         }
-
-        if (!data) {
-            document.getElementById('quiz-container').innerHTML = "Errore: File questions.json non trovato.";
-            return;
-        }
-
-        fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => {
-            const qData = data[k];
-            // Rilevamento automatico risposte multiple
-            const correctText = qData.giusta;
-            let correctIndices = [];
-            
-            if (Array.isArray(correctText)) {
-                correctIndices = correctText.map(t => qData.risposte.indexOf(t));
-            } else {
-                correctIndices = [qData.risposte.indexOf(correctText)];
-            }
-
-            return {
-                id: parseInt(k),
-                q: qData.domanda,
-                options: qData.risposte,
-                correct: correctIndices // Ora è sempre un array
-            };
-        }).sort((a,b) => a.id - b.id);
-
-        document.getElementById('quiz-range-label').innerText = `(1-${fullDb.length})`;
-        setupFilters(fullDb.length);
-        regenerateQuiz();
     }
 
-    // [Funzioni UI omesse per brevità, mantieni quelle del file precedente]
+    function setupFilters() {
+        const container = document.getElementById('filter-buttons-container');
+        container.innerHTML = '';
+        QUIZ_RANGES.forEach((r, i) => {
+            const btn = document.createElement('button');
+            btn.className = `btn-block ${activeBlocks.includes(i+1) ? 'active' : ''}`;
+            btn.innerText = r.name;
+            btn.onclick = () => {
+                isCloudMode = false;
+                if(activeBlocks.includes(i+1)) {
+                    if(activeBlocks.length > 1) activeBlocks = activeBlocks.filter(b => b !== i+1);
+                } else activeBlocks.push(i+1);
+                document.querySelectorAll('.btn-block').forEach((b, idx) => b.classList.toggle('active', activeBlocks.includes(idx+1)));
+                regenerateQuiz();
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    window.applyCustomRange = () => {
+        const s = parseInt(document.getElementById('start-range').value);
+        const e = parseInt(document.getElementById('end-range').value);
+        if(s > 0 && e >= s) {
+            isCloudMode = false; activeBlocks = [];
+            renderQuestions(fullDb.filter(q => q.id >= s && q.id <= e));
+        }
+    };
+
+    window.applySpecificIds = () => {
+        const val = document.getElementById('specific-ids').value;
+        const ids = val.split(',').map(id => parseInt(id.trim()));
+        isCloudMode = false; activeBlocks = [];
+        renderQuestions(fullDb.filter(q => ids.includes(q.id)));
+    };
+
+    window.setQMode = (m) => {
+        modeQ = m;
+        document.getElementById('q-rand').classList.toggle('active', m === 'random');
+        document.getElementById('q-ord').classList.toggle('active', m === 'ordered');
+        regenerateQuiz();
+    };
+
+    function regenerateQuiz() {
+        let list = isCloudMode ? fullDb.filter(q => cloudErrorIds.has(q.id)) : [];
+        if(!isCloudMode) {
+            activeBlocks.forEach(b => {
+                const range = QUIZ_RANGES[b-1];
+                list = list.concat(fullDb.filter(q => q.id >= range.start && q.id <= range.end));
+            });
+        }
+        if(modeQ === 'random') list.sort(() => Math.random() - 0.5);
+        renderQuestions(list);
+    }
+
+    function renderQuestions(list) {
+        const container = document.getElementById('quiz-container');
+        container.innerHTML = '';
+        document.getElementById('total-visible').innerText = list.length;
+        currentSelections = {};
+
+        list.forEach(q => {
+            const div = document.createElement('div');
+            div.className = 'question-block';
+            div.id = `q-${q.id}`;
+            
+            const count = cloudErrorCounts[String(q.id)] || 0;
+            const spoiler = cloudErrorIds.has(q.id) ? `
+                <div class="post-answer-reveal">
+                    <span class="count-badge">❌ ${count}</span>
+                    <button class="btn-remove-cloud" onclick="window.manualRemove(${q.id})">Rimuovi</button>
+                </div>` : '';
+
+            div.innerHTML = `
+                <div class="question-header">
+                    <div class="header-left"><span class="q-badge">#${q.id}</span> <b>${q.q}</b></div>
+                    ${spoiler}
+                </div>
+                <div class="options"></div>
+            `;
+
+            q.options.forEach((opt, i) => {
+                const btn = document.createElement('div');
+                btn.className = 'option-label';
+                btn.innerText = opt;
+                btn.onclick = () => handleAnswer(q.id, i, q.correct, btn, div);
+                div.querySelector('.options').appendChild(btn);
+            });
+            container.appendChild(div);
+        });
+        updateStats();
+    }
 
     function handleAnswer(qId, selIndex, correctIndices, el, parent) {
         if(parent.classList.contains('answered')) return;
-
         if(!currentSelections[qId]) currentSelections[qId] = [];
-        
+
         if(correctIndices.includes(selIndex)) {
             if(!currentSelections[qId].includes(selIndex)) {
                 el.classList.add('correct');
                 currentSelections[qId].push(selIndex);
-                
-                // Se tutte le risposte corrette sono state trovate
                 if(currentSelections[qId].length === correctIndices.length) {
                     parent.classList.add('answered');
                     score++;
@@ -257,16 +341,12 @@
                 }
             }
         } else {
-            // Errore
             el.classList.add('wrong');
             parent.classList.add('answered');
             errors++;
-            // Mostra tutte le corrette
             const opts = parent.querySelectorAll('.option-label');
             correctIndices.forEach(idx => opts[idx].classList.add('correct'));
-            
             if(currentUser) addErrorToCloud(qId);
-            
             const link = document.createElement('a');
             link.href = `#q-${qId}`; link.className = 'error-link'; link.innerText = `#${qId}`;
             document.getElementById('error-list').appendChild(link);
@@ -274,7 +354,18 @@
         }
     }
 
-    // [Il resto delle funzioni di rendering rimane invariato]
+    function updateStats() {
+        document.getElementById('score').innerText = score;
+        document.getElementById('errors').innerText = errors;
+        const total = parseInt(document.getElementById('total-visible').innerText) || 1;
+        document.getElementById('grade').innerText = ((score / total) * 30).toFixed(1);
+    }
+
+    window.resetProgress = () => { if(confirm("Resettare i punti sessione?")) location.reload(); };
+    const topBtn = document.getElementById("btn-back-to-top");
+    window.onscroll = () => topBtn.style.display = window.scrollY > 300 ? "block" : "none";
+
+    loadQuestions();
 </script>
 </body>
 </html>
