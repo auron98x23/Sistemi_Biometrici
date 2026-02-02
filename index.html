@@ -35,50 +35,51 @@
         <div class="score-item grade-text">🎓 Voto: <span id="grade">0.0</span></div>
     </div>
 
-    <div style="margin-bottom: 20px;">
-        <button id="btn-cloud-history" class="btn-cloud" onclick="window.startCloudReview()">
-            ☁️ Carica Errori dal Cloud (0)
-        </button>
-    </div>
-
-    <div id="error-panel" class="error-panel">
-        <span class="error-label">Domande Errate Sessione Corrente:</span>
-        <div id="error-list" class="error-list"></div>
-    </div>
+    <button id="btn-cloud-history" class="btn-cloud" onclick="window.startCloudReview()">
+        ☁️ Carica Errori dal Cloud (0)
+    </button>
 
     <div class="control-group">
         <span class="group-label">Seleziona Quiz (SisBio)</span>
         <div id="filter-buttons-container" class="btn-row"></div>
         
         <div class="custom-range-wrapper" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-            <span class="group-label">Range / ID Specifici</span>
+            <span class="group-label">Ricerca Rapida</span>
             <div class="custom-range-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <input type="number" id="start-range" placeholder="Da" style="max-width: 60px;">
                 <input type="number" id="end-range" placeholder="A" style="max-width: 60px;">
                 <button class="btn-block" onclick="window.applyCustomRange()">Vai</button>
                 <span style="margin:0 8px; color:var(--text-secondary);">|</span>
                 <input type="text" id="specific-ids" placeholder="Es: 2,4,10" style="flex:2;">
-                <button class="btn-block" onclick="window.applySpecificIds()">Cerca ID</button>
+                <button class="btn-block" onclick="window.applySpecificIds()">Cerca</button>
             </div>
             
-            <div style="margin-top: 10px;">
+            <div style="margin-top: 10px; display: flex; gap: 15px; flex-wrap: wrap;">
                 <label class="chk-wrapper"><input type="checkbox" id="chk-ids" checked onchange="window.toggleIds(this)"> Mostra #ID</label>
-                <label class="chk-wrapper" style="margin-left: 15px;"><input type="checkbox" id="chk-reveal" checked onchange="window.toggleReveal(this)"> Rivela dopo risposta</label>
+                <label class="chk-wrapper"><input type="checkbox" id="chk-reveal" checked onchange="window.toggleReveal(this)"> Rivela dopo risposta</label>
             </div>
         </div>
     </div>
 
     <div class="control-group">
-        <span class="group-label">Modalità Domande</span>
+        <span class="group-label">Ordine Domande</span>
         <div class="btn-row">
-            <button class="btn-mode btn-block" id="q-rand" onclick="window.setQMode('random')">🔀 Casuale</button>
-            <button class="btn-mode btn-block active" id="q-ord" onclick="window.setQMode('ordered')">🔢 Ordine Seriale</button>
+            <button class="btn-mode btn-block" id="q-rand" onclick="window.setQMode('random')">🔀 D. Casuali</button>
+            <button class="btn-mode btn-block active" id="q-ord" onclick="window.setQMode('ordered')">🔢 D. Ordine</button>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <span class="group-label">Ordine Risposte</span>
+        <div class="btn-row">
+            <button class="btn-mode btn-block" id="a-rand" onclick="window.setAMode('random')">🔀 R. Casuali</button>
+            <button class="btn-mode btn-block active" id="a-ord" onclick="window.setAMode('ordered')">ABC R. Ordine</button>
         </div>
     </div>
     
     <div class="btn-row" style="margin-top: 20px;">
         <button class="btn-reset" style="background-color: var(--text-secondary); color: white; flex:1;" onclick="window.resetProgress()">🗑️ Reset Sessione</button>
-        <button class="btn-err-toggle" style="background-color: var(--warning-color); flex:1;" onclick="window.toggleErrorPanel()">⚠️ Vedi Errori Sessione</button>
+        <button class="btn-err-toggle" style="background-color: var(--warning-color); flex:1;" onclick="window.toggleErrorPanel()">⚠️ Vedi Errori</button>
     </div>
 
     <div id="quiz-container" style="margin-top: 30px;">
@@ -86,7 +87,7 @@
     </div>
 </div>
 
-<button onclick="window.scrollToTop()" id="btn-back-to-top" class="btn-top" title="Torna su">⬆️</button>
+<button onclick="window.scrollToTop()" id="btn-back-to-top" class="btn-top">⬆️</button>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -111,7 +112,7 @@
     let activeBlocks = [1];
     let score = 0, errors = 0;
     let currentUser = null, cloudErrorIds = new Set(), cloudErrorCounts = {};
-    let modeQ = 'ordered', isCloudMode = false;
+    let modeQ = 'ordered', modeA = 'ordered', isCloudMode = false;
     let currentSelections = {};
 
     const QUIZ_RANGES = [
@@ -123,7 +124,7 @@
         { name: "Quiz 6", start: 255, end: 283 }
     ];
 
-    // --- TEMA E UI ---
+    // --- UI & THEME ---
     window.toggleTheme = () => {
         document.body.classList.toggle('amoled-mode');
         const isDark = document.body.classList.contains('amoled-mode');
@@ -135,17 +136,13 @@
     window.toggleIds = (cb) => document.body.classList.toggle('hide-numbers', !cb.checked);
     window.toggleReveal = (cb) => document.body.classList.toggle('reveal-mode', cb.checked);
     window.scrollToTop = () => window.scrollTo({top: 0, behavior: 'smooth'});
-    window.toggleErrorPanel = () => {
-        const p = document.getElementById('error-panel');
-        p.style.display = p.style.display === 'none' ? 'block' : 'none';
-    };
 
     // --- AUTH ---
     window.register = () => {
         const u = document.getElementById('username-input').value;
         const p = document.getElementById('password-input').value;
-        if(!u || p.length < 6) return alert("Username richiesto e Password min. 6 caratteri");
-        createUserWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).then(() => alert("Registrato!")).catch(e => alert(e.message));
+        if(!u || p.length < 6) return alert("Dati non validi");
+        createUserWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).catch(e => alert(e.message));
     };
     window.login = () => {
         const u = document.getElementById('username-input').value;
@@ -165,7 +162,7 @@
         }
     });
 
-    // --- CLOUD LOGIC ---
+    // --- CLOUD ---
     async function loadCloudErrors() {
         if (!currentUser) return;
         const snap = await getDoc(doc(db, "users", currentUser.uid));
@@ -173,14 +170,8 @@
             const data = snap.data();
             cloudErrorIds = new Set(data.errorIds || []);
             cloudErrorCounts = data.errorCounts || {};
-            updateCloudBtn();
-        } else {
-            await setDoc(doc(db, "users", currentUser.uid), { errorIds: [], errorCounts: {} });
+            document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori Cloud (${cloudErrorIds.size})`;
         }
-    }
-
-    function updateCloudBtn() {
-        document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
     }
 
     async function addErrorToCloud(qId) {
@@ -188,7 +179,6 @@
         const qIdStr = String(qId);
         cloudErrorIds.add(qId);
         cloudErrorCounts[qIdStr] = (cloudErrorCounts[qIdStr] || 0) + 1;
-        updateCloudBtn();
         await updateDoc(doc(db, "users", currentUser.uid), {
             errorIds: arrayUnion(qId),
             [`errorCounts.${qIdStr}`]: increment(1)
@@ -199,8 +189,6 @@
         const block = document.getElementById(`q-${qId}`);
         if(block) { block.style.opacity = '0'; setTimeout(() => block.remove(), 500); }
         cloudErrorIds.delete(qId);
-        delete cloudErrorCounts[String(qId)];
-        updateCloudBtn();
         await updateDoc(doc(db, "users", currentUser.uid), {
             errorIds: arrayRemove(qId),
             [`errorCounts.${qId}`]: deleteField()
@@ -209,29 +197,22 @@
 
     window.startCloudReview = () => { isCloudMode = true; regenerateQuiz(); };
 
-    // --- ENGINE ---
+    // --- QUIZ ENGINE ---
     async function loadQuestions() {
         try {
             const res = await fetch('questions.json');
             const data = await res.json();
-            fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => {
-                const item = data[k];
-                return {
-                    id: parseInt(k),
-                    q: item.domanda,
-                    options: item.risposte,
-                    // Gestione risposte multiple (trasforma in array se stringa)
-                    correct: Array.isArray(item.giusta) ? 
-                        item.giusta.map(g => item.risposte.indexOf(g)) : 
-                        [item.risposte.indexOf(item.giusta)]
-                };
-            }).sort((a,b) => a.id - b.id);
-
+            fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => ({
+                id: parseInt(k),
+                q: data[k].domanda,
+                options: data[k].risposte,
+                correct: Array.isArray(data[k].giusta) ? 
+                    data[k].giusta.map(g => data[k].risposte.indexOf(g)) : 
+                    [data[k].risposte.indexOf(data[k].giusta)]
+            })).sort((a,b) => a.id - b.id);
             setupFilters();
             regenerateQuiz();
-        } catch(e) {
-            document.getElementById('quiz-container').innerHTML = "Errore caricamento database.";
-        }
+        } catch(e) { document.getElementById('quiz-container').innerHTML = "Errore database."; }
     }
 
     function setupFilters() {
@@ -243,9 +224,8 @@
             btn.innerText = r.name;
             btn.onclick = () => {
                 isCloudMode = false;
-                if(activeBlocks.includes(i+1)) {
-                    if(activeBlocks.length > 1) activeBlocks = activeBlocks.filter(b => b !== i+1);
-                } else activeBlocks.push(i+1);
+                if(activeBlocks.includes(i+1)) activeBlocks = activeBlocks.filter(b => b !== i+1);
+                else activeBlocks.push(i+1);
                 document.querySelectorAll('.btn-block').forEach((b, idx) => b.classList.toggle('active', activeBlocks.includes(idx+1)));
                 regenerateQuiz();
             };
@@ -253,103 +233,68 @@
         });
     }
 
-    window.applyCustomRange = () => {
-        const s = parseInt(document.getElementById('start-range').value);
-        const e = parseInt(document.getElementById('end-range').value);
-        if(s > 0 && e >= s) {
-            isCloudMode = false; activeBlocks = [];
-            renderQuestions(fullDb.filter(q => q.id >= s && q.id <= e));
-        }
-    };
-
-    window.applySpecificIds = () => {
-        const val = document.getElementById('specific-ids').value;
-        const ids = val.split(',').map(id => parseInt(id.trim()));
-        isCloudMode = false; activeBlocks = [];
-        renderQuestions(fullDb.filter(q => ids.includes(q.id)));
-    };
-
-    window.setQMode = (m) => {
-        modeQ = m;
-        document.getElementById('q-rand').classList.toggle('active', m === 'random');
-        document.getElementById('q-ord').classList.toggle('active', m === 'ordered');
-        regenerateQuiz();
-    };
+    window.setQMode = (m) => { modeQ = m; document.getElementById('q-rand').classList.toggle('active', m==='random'); document.getElementById('q-ord').classList.toggle('active', m==='ordered'); regenerateQuiz(); };
+    window.setAMode = (m) => { modeA = m; document.getElementById('a-rand').classList.toggle('active', m==='random'); document.getElementById('a-ord').classList.toggle('active', m==='ordered'); regenerateQuiz(); };
 
     function regenerateQuiz() {
         let list = isCloudMode ? fullDb.filter(q => cloudErrorIds.has(q.id)) : [];
         if(!isCloudMode) {
             activeBlocks.forEach(b => {
-                const range = QUIZ_RANGES[b-1];
-                list = list.concat(fullDb.filter(q => q.id >= range.start && q.id <= range.end));
+                const r = QUIZ_RANGES[b-1];
+                list = list.concat(fullDb.filter(q => q.id >= r.start && q.id <= r.end));
             });
         }
-        if(modeQ === 'random') list.sort(() => Math.random() - 0.5);
-        renderQuestions(list);
+        
+        let processed = JSON.parse(JSON.stringify(list));
+        if(modeQ === 'random') processed.sort(() => Math.random() - 0.5);
+        if(modeA === 'random') {
+            processed.forEach(q => {
+                let idxs = q.options.map((_,i) => i).sort(() => Math.random() - 0.5);
+                let oldOpts = [...q.options];
+                q.options = idxs.map(i => oldOpts[i]);
+                q.correct = q.correct.map(c => idxs.indexOf(c));
+            });
+        }
+        render(processed);
     }
 
-    function renderQuestions(list) {
+    function render(list) {
         const container = document.getElementById('quiz-container');
         container.innerHTML = '';
         document.getElementById('total-visible').innerText = list.length;
         currentSelections = {};
-
         list.forEach(q => {
             const div = document.createElement('div');
-            div.className = 'question-block';
-            div.id = `q-${q.id}`;
-            
+            div.className = 'question-block'; div.id = `q-${q.id}`;
             const count = cloudErrorCounts[String(q.id)] || 0;
-            const spoiler = cloudErrorIds.has(q.id) ? `
-                <div class="post-answer-reveal">
-                    <span class="count-badge">❌ ${count}</span>
-                    <button class="btn-remove-cloud" onclick="window.manualRemove(${q.id})">Rimuovi</button>
-                </div>` : '';
-
-            div.innerHTML = `
-                <div class="question-header">
-                    <div class="header-left"><span class="q-badge">#${q.id}</span> <b>${q.q}</b></div>
-                    ${spoiler}
-                </div>
-                <div class="options"></div>
-            `;
-
+            const spoiler = cloudErrorIds.has(q.id) ? `<div class="post-answer-reveal"><span class="count-badge">❌ ${count}</span><button class="btn-remove-cloud" onclick="window.manualRemove(${q.id})">Rimuovi</button></div>` : '';
+            div.innerHTML = `<div class="question-header"><div class="header-left"><span class="q-badge">#${q.id}</span> <b>${q.q}</b></div>${spoiler}</div><div class="options"></div>`;
             q.options.forEach((opt, i) => {
                 const btn = document.createElement('div');
-                btn.className = 'option-label';
-                btn.innerText = opt;
+                btn.className = 'option-label'; btn.innerText = opt;
                 btn.onclick = () => handleAnswer(q.id, i, q.correct, btn, div);
                 div.querySelector('.options').appendChild(btn);
             });
             container.appendChild(div);
         });
-        updateStats();
     }
 
-    function handleAnswer(qId, selIndex, correctIndices, el, parent) {
+    function handleAnswer(qId, sel, corr, el, parent) {
         if(parent.classList.contains('answered')) return;
         if(!currentSelections[qId]) currentSelections[qId] = [];
-
-        if(correctIndices.includes(selIndex)) {
-            if(!currentSelections[qId].includes(selIndex)) {
+        
+        if(corr.includes(sel)) {
+            if(!currentSelections[qId].includes(sel)) {
                 el.classList.add('correct');
-                currentSelections[qId].push(selIndex);
-                if(currentSelections[qId].length === correctIndices.length) {
-                    parent.classList.add('answered');
-                    score++;
-                    updateStats();
+                currentSelections[qId].push(sel);
+                if(currentSelections[qId].length === corr.length) {
+                    parent.classList.add('answered'); score++; updateStats();
                 }
             }
         } else {
-            el.classList.add('wrong');
-            parent.classList.add('answered');
-            errors++;
-            const opts = parent.querySelectorAll('.option-label');
-            correctIndices.forEach(idx => opts[idx].classList.add('correct'));
+            el.classList.add('wrong'); parent.classList.add('answered'); errors++;
+            parent.querySelectorAll('.option-label').forEach((o, i) => { if(corr.includes(i)) o.classList.add('correct'); });
             if(currentUser) addErrorToCloud(qId);
-            const link = document.createElement('a');
-            link.href = `#q-${qId}`; link.className = 'error-link'; link.innerText = `#${qId}`;
-            document.getElementById('error-list').appendChild(link);
             updateStats();
         }
     }
@@ -361,10 +306,7 @@
         document.getElementById('grade').innerText = ((score / total) * 30).toFixed(1);
     }
 
-    window.resetProgress = () => { if(confirm("Resettare i punti sessione?")) location.reload(); };
-    const topBtn = document.getElementById("btn-back-to-top");
-    window.onscroll = () => topBtn.style.display = window.scrollY > 300 ? "block" : "none";
-
+    window.resetProgress = () => location.reload();
     loadQuestions();
 </script>
 </body>
