@@ -61,19 +61,35 @@
                 <button class="btn-block" onclick="window.applySpecificIds()">Cerca</button>
             </div>
             
-            <div style="margin-top: 10px; display: flex; gap: 15px;">
+            <div style="margin-top: 10px; display: flex; gap: 15px; flex-wrap: wrap;">
                 <label class="chk-wrapper"><input type="checkbox" id="chk-ids" checked onchange="window.toggleIds(this)"> Mostra #ID</label>
                 <label class="chk-wrapper"><input type="checkbox" id="chk-reveal" checked onchange="window.toggleReveal(this)"> Rivela dopo risposta</label>
             </div>
         </div>
     </div>
 
-    <div class="btn-row">
-        <button class="btn-mode btn-block" id="q-rand" onclick="window.setQMode('random')">🔀 Casuale</button>
-        <button class="btn-mode btn-block active" id="q-ord" onclick="window.setQMode('ordered')">🔢 Ordine</button>
+    <div class="control-group">
+        <span class="group-label">Ordine Domande</span>
+        <div class="btn-row modes-row">
+            <button class="btn-mode btn-block" id="q-rand" onclick="window.setQMode('random')">🔀 D. Random</button>
+            <button class="btn-mode btn-block active" id="q-ord" onclick="window.setQMode('ordered')">🔢 D. Ordine</button>
+        </div>
     </div>
 
-    <div id="quiz-container">
+    <div class="control-group">
+        <span class="group-label">Ordine Risposte</span>
+        <div class="btn-row modes-row">
+            <button class="btn-mode btn-block" id="a-rand" onclick="window.setAMode('random')">🔀 R. Random</button>
+            <button class="btn-mode btn-block active" id="a-ord" onclick="window.setAMode('ordered')">ABC R. Ordine</button>
+        </div>
+    </div>
+    
+    <div class="btn-row" style="margin-top: 20px;">
+        <button class="btn-reset" style="background-color: var(--text-secondary); color: white; flex:1;" onclick="window.resetProgress()">🗑️ Reset Sessione</button>
+        <button class="btn-err-toggle" style="background-color: var(--warning-color); flex:1;" onclick="window.toggleErrorPanel()">⚠️ Vedi Errori Sessione</button>
+    </div>
+
+    <div id="quiz-container" style="margin-top: 30px;">
         <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Caricamento...</p>
     </div>
 </div>
@@ -105,7 +121,7 @@
     const BLOCK_SIZE = 50;
     let score = 0, errors = 0;
     let currentUser = null, cloudErrorIds = new Set(), cloudErrorCounts = {};
-    let modeQ = 'ordered', isCloudMode = false;
+    let modeQ = 'ordered', modeA = 'ordered', isCloudMode = false;
 
     // --- TEMA E UI ---
     window.toggleTheme = () => {
@@ -185,7 +201,6 @@
 
     // --- ENGINE ---
     async function loadQuestions() {
-        // PROVA A CARICARE questions(2).json SE IL PRIMO FALLISCE
         const files = ['questions.json', 'questions(2).json'];
         let data = null;
         for (const file of files) {
@@ -237,7 +252,7 @@
         if(s > 0 && e >= s) {
             isCloudMode = false; activeBlocks = [];
             const list = fullDb.filter(q => q.id >= s && q.id <= e);
-            renderQuestions(list);
+            processAndRender(list);
         }
     };
 
@@ -246,7 +261,7 @@
         const ids = val.split(',').map(id => parseInt(id.trim()));
         isCloudMode = false; activeBlocks = [];
         const list = fullDb.filter(q => ids.includes(q.id));
-        renderQuestions(list);
+        processAndRender(list);
     };
 
     window.setQMode = (m) => { 
@@ -254,6 +269,13 @@
         document.getElementById('q-rand').classList.toggle('active', m==='random');
         document.getElementById('q-ord').classList.toggle('active', m==='ordered');
         regenerateQuiz(); 
+    };
+
+    window.setAMode = (m) => {
+        modeA = m;
+        document.getElementById('a-rand').classList.toggle('active', m==='random');
+        document.getElementById('a-ord').classList.toggle('active', m==='ordered');
+        regenerateQuiz();
     };
 
     function regenerateQuiz() {
@@ -264,8 +286,24 @@
                 list = list.concat(fullDb.slice(start, start + BLOCK_SIZE));
             });
         }
-        if(modeQ === 'random') list.sort(() => Math.random() - 0.5);
-        renderQuestions(list);
+        processAndRender(list);
+    }
+
+    function processAndRender(list) {
+        let processedList = JSON.parse(JSON.stringify(list));
+
+        if(modeQ === 'random') processedList.sort(() => Math.random() - 0.5);
+
+        if(modeA === 'random') {
+            processedList.forEach(q => {
+                let indexedOptions = q.options.map((opt, i) => ({ text: opt, originalIndex: i }));
+                indexedOptions.sort(() => Math.random() - 0.5);
+                q.options = indexedOptions.map(o => o.text);
+                q.correct = indexedOptions.findIndex(o => o.originalIndex === q.correct);
+            });
+        }
+
+        renderQuestions(processedList);
     }
 
     function renderQuestions(list) {
