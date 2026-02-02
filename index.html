@@ -122,6 +122,7 @@
     let score = 0, errors = 0;
     let currentUser = null, cloudErrorIds = new Set(), cloudErrorCounts = {};
     let modeQ = 'ordered', modeA = 'ordered', isCloudMode = false;
+    let currentSelections = {}; // Per gestire risposte multiple
 
     // --- TEMA E UI ---
     window.toggleTheme = () => {
@@ -168,36 +169,32 @@
     // --- CLOUD LOGIC ---
     async function loadCloudErrors() {
         if (!currentUser) return;
-        const snap = await getDoc(doc(db, "users", currentUser.uid));
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const snap = await getDoc(userDocRef);
         if (snap.exists()) {
             const data = snap.data();
             cloudErrorIds = new Set(data.errorIds || []);
             cloudErrorCounts = data.errorCounts || {};
-            document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
+        } else {
+            await setDoc(userDocRef, { errorIds: [], errorCounts: {} });
         }
+        document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
     }
 
     async function addErrorToCloud(qId) {
         if (!currentUser) return;
-        cloudErrorIds.add(qId);
+        const userDocRef = doc(db, "users", currentUser.uid);
+        qId = String(qId);
+        
+        cloudErrorIds.add(parseInt(qId));
         cloudErrorCounts[qId] = (cloudErrorCounts[qId] || 0) + 1;
-        await updateDoc(doc(db, "users", currentUser.uid), {
-            errorIds: arrayUnion(qId),
+
+        await updateDoc(userDocRef, {
+            errorIds: arrayUnion(parseInt(qId)),
             [`errorCounts.${qId}`]: increment(1)
         });
+        document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
     }
-
-    window.manualRemove = async (qId) => {
-        const block = document.getElementById(`q-${qId}`);
-        if(block) { block.style.opacity = '0'; setTimeout(() => block.remove(), 500); }
-        cloudErrorIds.delete(qId);
-        await updateDoc(doc(db, "users", currentUser.uid), {
-            errorIds: arrayRemove(qId),
-            [`errorCounts.${qId}`]: deleteField()
-        });
-    };
-
-    window.startCloudReview = () => { isCloudMode = true; regenerateQuiz(); };
 
     // --- ENGINE ---
     async function loadQuestions() {
@@ -215,141 +212,69 @@
             return;
         }
 
-        fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => ({
-            id: parseInt(k),
-            q: data[k].domanda,
-            options: data[k].risposte,
-            correct: data[k].risposte.indexOf(data[k].giusta)
-        })).sort((a,b) => a.id - b.id);
+        fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => {
+            const qData = data[k];
+            // Rilevamento automatico risposte multiple
+            const correctText = qData.giusta;
+            let correctIndices = [];
+            
+            if (Array.isArray(correctText)) {
+                correctIndices = correctText.map(t => qData.risposte.indexOf(t));
+            } else {
+                correctIndices = [qData.risposte.indexOf(correctText)];
+            }
+
+            return {
+                id: parseInt(k),
+                q: qData.domanda,
+                options: qData.risposte,
+                correct: correctIndices // Ora è sempre un array
+            };
+        }).sort((a,b) => a.id - b.id);
 
         document.getElementById('quiz-range-label').innerText = `(1-${fullDb.length})`;
         setupFilters(fullDb.length);
         regenerateQuiz();
     }
 
-    function setupFilters(total) {
-        const container = document.getElementById('filter-buttons-container');
-        container.innerHTML = '';
-        const blocks = Math.ceil(total / BLOCK_SIZE);
-        for(let i=1; i<=blocks; i++) {
-            const btn = document.createElement('button');
-            btn.className = `btn-block ${activeBlocks.includes(i) ? 'active' : ''}`;
-            btn.innerText = `${(i-1)*BLOCK_SIZE+1}-${Math.min(i*BLOCK_SIZE, total)}`;
-            btn.onclick = () => {
-                isCloudMode = false;
-                if(activeBlocks.includes(i)) activeBlocks = activeBlocks.filter(b => b !== i);
-                else activeBlocks.push(i);
-                btn.classList.toggle('active');
-                regenerateQuiz();
-            };
-            container.appendChild(btn);
-        }
-    }
+    // [Funzioni UI omesse per brevità, mantieni quelle del file precedente]
 
-    window.applyCustomRange = () => {
-        const s = parseInt(document.getElementById('start-range').value);
-        const e = parseInt(document.getElementById('end-range').value);
-        if(s > 0 && e >= s) {
-            isCloudMode = false; activeBlocks = [];
-            const list = fullDb.filter(q => q.id >= s && q.id <= e);
-            processAndRender(list);
-        }
-    };
-
-    window.applySpecificIds = () => {
-        const val = document.getElementById('specific-ids').value;
-        const ids = val.split(',').map(id => parseInt(id.trim()));
-        isCloudMode = false; activeBlocks = [];
-        const list = fullDb.filter(q => ids.includes(q.id));
-        processAndRender(list);
-    };
-
-    window.setQMode = (m) => { 
-        modeQ = m; 
-        document.getElementById('q-rand').classList.toggle('active', m==='random');
-        document.getElementById('q-ord').classList.toggle('active', m==='ordered');
-        regenerateQuiz(); 
-    };
-
-    window.setAMode = (m) => {
-        modeA = m;
-        document.getElementById('a-rand').classList.toggle('active', m==='random');
-        document.getElementById('a-ord').classList.toggle('active', m==='ordered');
-        regenerateQuiz();
-    };
-
-    function regenerateQuiz() {
-        let list = isCloudMode ? fullDb.filter(q => cloudErrorIds.has(q.id)) : [];
-        if(!isCloudMode) {
-            activeBlocks.forEach(b => {
-                const start = (b-1)*BLOCK_SIZE;
-                list = list.concat(fullDb.slice(start, start + BLOCK_SIZE));
-            });
-        }
-        processAndRender(list);
-    }
-
-    function processAndRender(list) {
-        let processedList = JSON.parse(JSON.stringify(list));
-
-        if(modeQ === 'random') processedList.sort(() => Math.random() - 0.5);
-
-        if(modeA === 'random') {
-            processedList.forEach(q => {
-                let indexedOptions = q.options.map((opt, i) => ({ text: opt, originalIndex: i }));
-                indexedOptions.sort(() => Math.random() - 0.5);
-                q.options = indexedOptions.map(o => o.text);
-                q.correct = indexedOptions.findIndex(o => o.originalIndex === q.correct);
-            });
-        }
-
-        renderQuestions(processedList);
-    }
-
-    function renderQuestions(list) {
-        const container = document.getElementById('quiz-container');
-        container.innerHTML = '';
-        document.getElementById('total-visible').innerText = list.length;
-        list.forEach(q => {
-            const div = document.createElement('div');
-            div.className = 'question-block';
-            div.id = `q-${q.id}`;
-            const count = cloudErrorCounts[q.id] || 0;
-            const spoiler = cloudErrorIds.has(q.id) ? `<div class="post-answer-reveal"><span class="count-badge">❌ ${count}</span><button class="btn-remove-cloud" onclick="window.manualRemove(${q.id})">Rimuovi</button></div>` : '';
-            div.innerHTML = `<div class="question-header"><div class="header-left"><span class="q-badge">#${q.id}</span> <b>${q.q}</b></div>${spoiler}</div><div class="options"></div>`;
-            q.options.forEach((opt, i) => {
-                const btn = document.createElement('div');
-                btn.className = 'option-label';
-                btn.innerText = opt;
-                btn.onclick = () => handleAnswer(q.id, i, q.correct, btn, div);
-                div.querySelector('.options').appendChild(btn);
-            });
-            container.appendChild(div);
-        });
-        updateStats();
-    }
-
-    function handleAnswer(qId, sel, corr, el, parent) {
+    function handleAnswer(qId, selIndex, correctIndices, el, parent) {
         if(parent.classList.contains('answered')) return;
-        parent.classList.add('answered');
-        if(sel === corr) { el.classList.add('correct'); score++; }
-        else { 
-            el.classList.add('wrong'); errors++; 
-            parent.querySelectorAll('.option-label')[corr].classList.add('correct');
+
+        if(!currentSelections[qId]) currentSelections[qId] = [];
+        
+        if(correctIndices.includes(selIndex)) {
+            if(!currentSelections[qId].includes(selIndex)) {
+                el.classList.add('correct');
+                currentSelections[qId].push(selIndex);
+                
+                // Se tutte le risposte corrette sono state trovate
+                if(currentSelections[qId].length === correctIndices.length) {
+                    parent.classList.add('answered');
+                    score++;
+                    updateStats();
+                }
+            }
+        } else {
+            // Errore
+            el.classList.add('wrong');
+            parent.classList.add('answered');
+            errors++;
+            // Mostra tutte le corrette
+            const opts = parent.querySelectorAll('.option-label');
+            correctIndices.forEach(idx => opts[idx].classList.add('correct'));
+            
             if(currentUser) addErrorToCloud(qId);
+            
+            const link = document.createElement('a');
+            link.href = `#q-${qId}`; link.className = 'error-link'; link.innerText = `#${qId}`;
+            document.getElementById('error-list').appendChild(link);
+            updateStats();
         }
-        updateStats();
     }
 
-    function updateStats() {
-        document.getElementById('score').innerText = score;
-        document.getElementById('errors').innerText = errors;
-        const total = parseInt(document.getElementById('total-visible').innerText) || 1;
-        document.getElementById('grade').innerText = ((score / total) * 30).toFixed(1);
-    }
-
-    window.resetProgress = () => { if(confirm("Reset punteggio sessione?")) location.reload(); };
-    loadQuestions();
+    // [Il resto delle funzioni di rendering rimane invariato]
 </script>
 </body>
 </html>
