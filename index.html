@@ -36,7 +36,7 @@
         <div class="score-item grade-text">🎓 Voto: <span id="grade">0.0</span></div>
     </div>
 
-    <button id="btn-cloud-history" class="btn-cloud" style="display:none; margin-bottom: 20px;">
+    <button id="btn-cloud-history" class="btn-action" style="display:none; width:100%; background:var(--purple-color); color:white; margin-bottom: 20px;">
         ☁️ Carica Errori dal Cloud (0)
     </button>
 
@@ -67,12 +67,12 @@
     <div class="control-group">
         <div class="btn-row">
             <div style="flex:1">
-                <span class="group-label">Ordine Domande (Reset auto)</span>
+                <span class="group-label">Ordine Domande</span>
                 <button class="btn-mode active" id="q-ord">🔢 Serie</button>
                 <button class="btn-mode" id="q-rand">🔀 Mix</button>
             </div>
             <div style="flex:1">
-                <span class="group-label">Ordine Risposte (Reset auto)</span>
+                <span class="group-label">Ordine Risposte</span>
                 <button class="btn-mode active" id="a-ord">ABC</button>
                 <button class="btn-mode" id="a-rand">🔀 Mix</button>
             </div>
@@ -80,7 +80,7 @@
     </div>
 
     <div id="quiz-container" style="margin-top: 30px;">
-        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Caricamento database...</p>
+        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Inizializzazione database...</p>
     </div>
 </div>
 
@@ -107,13 +107,14 @@
 
     let fullDb = [];
     let activeBlocks = [1];
+    let currentFilteredBase = []; // La base di domande selezionata (filtri o range)
     const BLOCK_SIZE = 50;
     let score = 0, errors = 0;
     let currentUser = null, cloudErrorIds = new Set(), cloudErrorCounts = {};
     let modeQ = 'ordered', modeA = 'ordered', isCloudMode = false;
     let currentSelections = {};
 
-    // --- UI HELPERS ---
+    // --- UI LOGIC ---
     window.toggleTheme = () => {
         document.body.classList.toggle('amoled-mode');
         const isDark = document.body.classList.contains('amoled-mode');
@@ -174,15 +175,12 @@
         }
     }
 
-    async function addErrorToCloud(qId) {
+    async function saveErrorToCloud(qId) {
         if (!currentUser) return;
         const qIdStr = String(qId);
-        
-        // Update locale per riflettere subito l'incremento
         cloudErrorIds.add(parseInt(qId));
         cloudErrorCounts[qIdStr] = (cloudErrorCounts[qIdStr] || 0) + 1;
         
-        // Update UI badge della domanda
         const badge = document.querySelector(`#hist-${qId} .badge-error`);
         if(badge) badge.innerText = `Errori Cloud: ${cloudErrorCounts[qIdStr]}`;
 
@@ -222,7 +220,7 @@
             document.getElementById('quiz-range-label').innerText = `(1-${fullDb.length})`;
             setupFilters();
             regenerateQuiz();
-        } catch(e) { document.getElementById('quiz-container').innerHTML = "Errore caricamento database."; }
+        } catch(e) { document.getElementById('quiz-container').innerHTML = "Errore database."; }
     }
 
     function setupFilters() {
@@ -234,7 +232,6 @@
             btn.className = `btn-block ${activeBlocks.includes(i) ? 'active' : ''}`;
             btn.innerText = `B${i}`;
             btn.onclick = () => {
-                resetInternalStats(); // Reset automatico al cambio blocco
                 isCloudMode = false;
                 if(activeBlocks.includes(i)) {
                     if(activeBlocks.length > 1) activeBlocks = activeBlocks.filter(b => b !== i);
@@ -247,29 +244,29 @@
     }
 
     // MODALITA CONTROLLI
-    document.getElementById('q-ord').onclick = () => { resetInternalStats(); modeQ = 'ordered'; updateModeUI('q'); regenerateQuiz(); };
-    document.getElementById('q-rand').onclick = () => { resetInternalStats(); modeQ = 'random'; updateModeUI('q'); regenerateQuiz(); };
-    document.getElementById('a-ord').onclick = () => { resetInternalStats(); modeA = 'ordered'; updateModeUI('a'); regenerateQuiz(); };
-    document.getElementById('a-rand').onclick = () => { resetInternalStats(); modeA = 'random'; updateModeUI('a'); regenerateQuiz(); };
-    document.getElementById('btn-cloud-history').onclick = () => { resetInternalStats(); isCloudMode = true; activeBlocks = []; regenerateQuiz(); };
-    document.getElementById('btn-reset-session').onclick = () => { resetInternalStats(); regenerateQuiz(); };
+    document.getElementById('q-ord').onclick = () => { modeQ = 'ordered'; updateModeUI('q'); applyOrderingAndRender(); };
+    document.getElementById('q-rand').onclick = () => { modeQ = 'random'; updateModeUI('q'); applyOrderingAndRender(); };
+    document.getElementById('a-ord').onclick = () => { modeA = 'ordered'; updateModeUI('a'); applyOrderingAndRender(); };
+    document.getElementById('a-rand').onclick = () => { modeA = 'random'; updateModeUI('a'); applyOrderingAndRender(); };
+    document.getElementById('btn-cloud-history').onclick = () => { isCloudMode = true; activeBlocks = []; regenerateQuiz(); };
+    document.getElementById('btn-reset-session').onclick = () => { resetInternalStats(); applyOrderingAndRender(); };
     
     document.getElementById('btn-apply-range').onclick = () => {
         const s = parseInt(document.getElementById('start-range').value);
         const e = parseInt(document.getElementById('end-range').value);
         if(s > 0 && e >= s) { 
-            resetInternalStats(); // Reset automatico al cambio range
             isCloudMode = false; activeBlocks = []; 
-            processAndRender(fullDb.filter(q => q.id >= s && q.id <= e)); 
+            currentFilteredBase = fullDb.filter(q => q.id >= s && q.id <= e);
+            applyOrderingAndRender();
         }
     };
     document.getElementById('btn-apply-ids').onclick = () => {
         const val = document.getElementById('specific-ids').value;
         const ids = val.split(',').map(v => parseInt(v.trim())).filter(n => !isNaN(n));
         if(ids.length > 0) {
-            resetInternalStats(); // Reset automatico alla ricerca ID
             isCloudMode = false; activeBlocks = []; 
-            processAndRender(fullDb.filter(q => ids.includes(q.id))); 
+            currentFilteredBase = fullDb.filter(q => ids.includes(q.id));
+            applyOrderingAndRender();
         }
     };
 
@@ -284,19 +281,26 @@
     }
 
     function regenerateQuiz() {
-        let list = isCloudMode ? fullDb.filter(q => cloudErrorIds.has(q.id)) : [];
-        if(!isCloudMode) {
+        if(isCloudMode) {
+            currentFilteredBase = fullDb.filter(q => cloudErrorIds.has(q.id));
+        } else {
+            currentFilteredBase = [];
             activeBlocks.forEach(b => {
                 const start = (b-1)*BLOCK_SIZE;
-                list = list.concat(fullDb.slice(start, start + BLOCK_SIZE));
+                currentFilteredBase = currentFilteredBase.concat(fullDb.slice(start, start + BLOCK_SIZE));
             });
         }
-        processAndRender(list);
+        applyOrderingAndRender();
     }
 
-    function processAndRender(list) {
-        let processed = JSON.parse(JSON.stringify(list));
-        if(modeQ === 'random') processed.sort(() => Math.random() - 0.5);
+    function applyOrderingAndRender() {
+        resetInternalStats(); // Reset automatico dei punti ad ogni cambio
+        let processed = JSON.parse(JSON.stringify(currentFilteredBase));
+        
+        if(modeQ === 'random') {
+            processed.sort(() => Math.random() - 0.5);
+        }
+        
         if(modeA === 'random') {
             processed.forEach(q => {
                 let mapping = q.options.map((text, i) => ({ text, i }));
@@ -312,8 +316,7 @@
         const container = document.getElementById('quiz-container');
         container.innerHTML = '';
         document.getElementById('total-visible').innerText = list.length;
-        currentSelections = {};
-
+        
         list.forEach(q => {
             const div = document.createElement('div');
             div.className = 'question-block'; div.id = `q-${q.id}`;
@@ -324,7 +327,7 @@
                 <div class="options"></div>
                 <div class="history-info" id="hist-${q.id}" style="display:none">
                     <span class="badge-error">Errori Cloud: ${count}</span>
-                    ${isCloudMode ? `<button class="btn-action" style="padding:4px 8px; font-size:0.8rem; margin-left:auto; background:var(--warning-color); color:black;" onclick="window.manualRemoveCloud(${q.id})">Rimuovi dal Cloud</button>` : ''}
+                    ${isCloudMode ? `<button class="btn-action" style="padding:4px 8px; font-size:0.8rem; margin-left:auto; background:var(--warning-color); color:black;" onclick="window.manualRemoveCloud(${q.id})">Rimuovi</button>` : ''}
                 </div>
             `;
             
@@ -344,20 +347,18 @@
         if(!currentSelections[qId]) currentSelections[qId] = [];
         
         if(corr.includes(sel)) {
-            if(!currentSelections[qId].includes(sel)) {
-                el.classList.add('correct');
-                currentSelections[qId].push(sel);
-                if(currentSelections[qId].length === corr.length) {
-                    parent.classList.add('answered'); score++; 
-                    document.getElementById(`hist-${qId}`).style.display = 'flex';
-                    updateStats();
-                }
+            el.classList.add('correct');
+            if(!currentSelections[qId].includes(sel)) currentSelections[qId].push(sel);
+            if(currentSelections[qId].length === corr.length) {
+                parent.classList.add('answered'); score++; 
+                document.getElementById(`hist-${qId}`).style.display = 'flex';
+                updateStats();
             }
         } else {
             el.classList.add('wrong'); parent.classList.add('answered'); errors++;
             parent.querySelectorAll('.option-label').forEach((o, i) => { if(corr.includes(i)) o.classList.add('correct'); });
             document.getElementById(`hist-${qId}`).style.display = 'flex';
-            if(currentUser) addErrorToCloud(qId);
+            if(currentUser) saveErrorToCloud(qId);
             updateStats();
         }
     }
