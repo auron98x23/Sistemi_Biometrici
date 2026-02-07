@@ -8,6 +8,11 @@
 </head>
 <body class="reveal-mode"> 
 
+<div id="progress-pill" class="floating-progress" style="display: none;">
+    <span>Progresso:</span>
+    <span id="progress-percent">0%</span>
+</div>
+
 <div class="container">
     
     <div class="header-top">
@@ -36,7 +41,7 @@
         <div class="score-item grade-text">🎓 Voto: <span id="grade">0.0</span></div>
     </div>
 
-    <button id="btn-cloud-history" class="btn-action" style="display:none; width:100%; background:var(--purple-color); color:white; margin-bottom: 20px;">
+    <button id="btn-cloud-history" class="btn-cloud" style="display:none; margin-bottom: 20px;">
         ☁️ Carica Errori dal Cloud (0)
     </button>
 
@@ -50,9 +55,7 @@
                 <input type="number" id="start-range" placeholder="Da" style="max-width: 65px;">
                 <input type="number" id="end-range" placeholder="A" style="max-width: 65px;">
                 <button class="btn-block" style="flex:0" id="btn-apply-range">Vai</button>
-                
                 <span style="margin:0 5px; color:var(--text-secondary);">|</span>
-
                 <input type="text" id="specific-ids" placeholder="Es: 1,12,45" style="flex:1; min-width: 100px;">
                 <button class="btn-block" style="flex:0" id="btn-apply-ids">Cerca</button>
             </div>
@@ -80,7 +83,7 @@
     </div>
 
     <div id="quiz-container" style="margin-top: 30px;">
-        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Inizializzazione database...</p>
+        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Caricamento database...</p>
     </div>
 </div>
 
@@ -105,16 +108,14 @@
     const db = getFirestore(app);
     const FAKE_DOMAIN = "@quiz.app";
 
-    let fullDb = [];
-    let activeBlocks = [1];
-    let currentFilteredBase = []; // La base di domande selezionata (filtri o range)
+    let fullDb = [], activeBlocks = [1], currentFilteredBase = [];
     const BLOCK_SIZE = 50;
-    let score = 0, errors = 0;
-    let currentUser = null, cloudErrorIds = new Set(), cloudErrorCounts = {};
+    let score = 0, errors = 0, currentUser = null;
+    let cloudErrorIds = new Set(), cloudErrorCounts = {};
     let modeQ = 'ordered', modeA = 'ordered', isCloudMode = false;
     let currentSelections = {};
 
-    // --- UI LOGIC ---
+    // --- UI HELPERS ---
     window.toggleTheme = () => {
         document.body.classList.toggle('amoled-mode');
         const isDark = document.body.classList.contains('amoled-mode');
@@ -122,7 +123,6 @@
         localStorage.setItem('quiz-theme', isDark ? 'dark' : 'light');
     };
     if (localStorage.getItem('quiz-theme') === 'dark') window.toggleTheme();
-
     window.toggleIds = (cb) => document.body.classList.toggle('hide-numbers', !cb.checked);
     
     const topBtn = document.getElementById("btn-back-to-top");
@@ -130,27 +130,14 @@
     topBtn.onclick = () => window.scrollTo({top: 0, behavior: 'smooth'});
 
     function resetInternalStats() {
-        score = 0;
-        errors = 0;
-        currentSelections = {};
+        score = 0; errors = 0; currentSelections = {};
         document.getElementById('score').innerText = "0";
         document.getElementById('errors').innerText = "0";
         document.getElementById('grade').innerText = "0.0";
+        document.getElementById('progress-percent').innerText = "0%";
     }
 
-    // --- AUTH ---
-    document.getElementById('btn-login-trigger').onclick = () => {
-        const u = document.getElementById('username-input').value;
-        const p = document.getElementById('password-input').value;
-        signInWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).catch(() => alert("Credenziali non valide"));
-    };
-    document.getElementById('btn-reg-trigger').onclick = () => {
-        const u = document.getElementById('username-input').value;
-        const p = document.getElementById('password-input').value;
-        createUserWithEmailAndPassword(auth, u + FAKE_DOMAIN, p).catch(e => alert(e.message));
-    };
-    document.getElementById('btn-logout-trigger').onclick = () => signOut(auth).then(() => location.reload());
-
+    // --- AUTH & CLOUD ---
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUser = user;
@@ -161,6 +148,10 @@
         }
     });
 
+    document.getElementById('btn-login-trigger').onclick = () => signInWithEmailAndPassword(auth, document.getElementById('username-input').value + FAKE_DOMAIN, document.getElementById('password-input').value).catch(() => alert("Credenziali non valide"));
+    document.getElementById('btn-reg-trigger').onclick = () => createUserWithEmailAndPassword(auth, document.getElementById('username-input').value + FAKE_DOMAIN, document.getElementById('password-input').value).catch(e => alert(e.message));
+    document.getElementById('btn-logout-trigger').onclick = () => signOut(auth).then(() => location.reload());
+
     async function loadCloudErrors() {
         const snap = await getDoc(doc(db, "users", currentUser.uid));
         if (snap.exists()) {
@@ -169,9 +160,7 @@
             cloudErrorCounts = data.errorCounts || {};
             const btn = document.getElementById('btn-cloud-history');
             btn.style.display = 'block';
-            btn.innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
-        } else {
-            await setDoc(doc(db, "users", currentUser.uid), { errorIds: [], errorCounts: {} });
+            btn.innerText = `☁️ Errori dal Cloud (${cloudErrorIds.size})`;
         }
     }
 
@@ -180,29 +169,23 @@
         const qIdStr = String(qId);
         cloudErrorIds.add(parseInt(qId));
         cloudErrorCounts[qIdStr] = (cloudErrorCounts[qIdStr] || 0) + 1;
-        
         const badge = document.querySelector(`#hist-${qId} .badge-error`);
         if(badge) badge.innerText = `Errori Cloud: ${cloudErrorCounts[qIdStr]}`;
 
         await updateDoc(doc(db, "users", currentUser.uid), {
             errorIds: arrayUnion(parseInt(qId)),
             [`errorCounts.${qIdStr}`]: increment(1)
-        });
-        document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
+        }).catch(() => setDoc(doc(db, "users", currentUser.uid), { errorIds: [parseInt(qId)], errorCounts: { [qIdStr]: 1 } }));
+        document.getElementById('btn-cloud-history').innerText = `☁️ Errori dal Cloud (${cloudErrorIds.size})`;
     }
 
     window.manualRemoveCloud = async (qId) => {
         if(!confirm(`Rimuovere la domanda #${qId} dal Cloud?`)) return;
-        const qIdStr = String(qId);
-        const qIdNum = parseInt(qId);
-        await updateDoc(doc(db, "users", currentUser.uid), {
-            errorIds: arrayRemove(qIdNum),
-            [`errorCounts.${qIdStr}`]: deleteField()
-        });
-        cloudErrorIds.delete(qIdNum);
-        delete cloudErrorCounts[qIdStr];
+        const qIdStr = String(qId); const qIdNum = parseInt(qId);
+        await updateDoc(doc(db, "users", currentUser.uid), { errorIds: arrayRemove(qIdNum), [`errorCounts.${qIdStr}`]: deleteField() });
+        cloudErrorIds.delete(qIdNum); delete cloudErrorCounts[qIdStr];
         document.getElementById(`q-${qId}`).remove();
-        document.getElementById('btn-cloud-history').innerText = `☁️ Carica Errori dal Cloud (${cloudErrorIds.size})`;
+        document.getElementById('btn-cloud-history').innerText = `☁️ Errori dal Cloud (${cloudErrorIds.size})`;
     };
 
     // --- ENGINE ---
@@ -211,96 +194,55 @@
             const res = await fetch('questions.json');
             const data = await res.json();
             fullDb = Object.keys(data).filter(k => !isNaN(k)).map(k => ({
-                id: parseInt(k),
-                q: data[k].domanda,
-                options: data[k].risposte,
-                correct: Array.isArray(data[k].giusta) ? data[k].giusta : [data[k].giusta]
+                id: parseInt(k), q: data[k].domanda, options: data[k].risposte, correct: Array.isArray(data[k].giusta) ? data[k].giusta : [data[k].giusta]
             })).sort((a,b) => a.id - b.id);
-
-            document.getElementById('quiz-range-label').innerText = `(1-${fullDb.length})`;
-            setupFilters();
-            regenerateQuiz();
-        } catch(e) { document.getElementById('quiz-container').innerHTML = "Errore database."; }
+            setupFilters(); regenerateQuiz();
+        } catch(e) { document.getElementById('quiz-container').innerHTML = "Errore caricamento database."; }
     }
 
     function setupFilters() {
         const container = document.getElementById('filter-buttons-container');
         container.innerHTML = '';
-        const blocksCount = Math.ceil(fullDb.length / BLOCK_SIZE);
-        for(let i=1; i<=blocksCount; i++) {
+        for(let i=1; i<=Math.ceil(fullDb.length / BLOCK_SIZE); i++) {
             const btn = document.createElement('button');
             btn.className = `btn-block ${activeBlocks.includes(i) ? 'active' : ''}`;
             btn.innerText = `B${i}`;
-            btn.onclick = () => {
-                isCloudMode = false;
-                if(activeBlocks.includes(i)) {
-                    if(activeBlocks.length > 1) activeBlocks = activeBlocks.filter(b => b !== i);
-                } else activeBlocks.push(i);
-                document.querySelectorAll('.btn-block').forEach((b, idx) => b.classList.toggle('active', activeBlocks.includes(idx+1)));
-                regenerateQuiz();
-            };
+            btn.onclick = () => { isCloudMode = false; activeBlocks = [i]; setupFilters(); regenerateQuiz(); };
             container.appendChild(btn);
         }
     }
 
-    // MODALITA CONTROLLI
-    document.getElementById('q-ord').onclick = () => { modeQ = 'ordered'; updateModeUI('q'); applyOrderingAndRender(); };
-    document.getElementById('q-rand').onclick = () => { modeQ = 'random'; updateModeUI('q'); applyOrderingAndRender(); };
-    document.getElementById('a-ord').onclick = () => { modeA = 'ordered'; updateModeUI('a'); applyOrderingAndRender(); };
-    document.getElementById('a-rand').onclick = () => { modeA = 'random'; updateModeUI('a'); applyOrderingAndRender(); };
+    document.getElementById('q-ord').onclick = () => { modeQ = 'ordered'; updateUI('q'); applyAndRender(); };
+    document.getElementById('q-rand').onclick = () => { modeQ = 'random'; updateUI('q'); applyAndRender(); };
+    document.getElementById('a-ord').onclick = () => { modeA = 'ordered'; updateUI('a'); applyAndRender(); };
+    document.getElementById('a-rand').onclick = () => { modeA = 'random'; updateUI('a'); applyAndRender(); };
     document.getElementById('btn-cloud-history').onclick = () => { isCloudMode = true; activeBlocks = []; regenerateQuiz(); };
-    document.getElementById('btn-reset-session').onclick = () => { resetInternalStats(); applyOrderingAndRender(); };
-    
+    document.getElementById('btn-reset-session').onclick = () => { resetInternalStats(); applyAndRender(); };
     document.getElementById('btn-apply-range').onclick = () => {
         const s = parseInt(document.getElementById('start-range').value);
         const e = parseInt(document.getElementById('end-range').value);
-        if(s > 0 && e >= s) { 
-            isCloudMode = false; activeBlocks = []; 
-            currentFilteredBase = fullDb.filter(q => q.id >= s && q.id <= e);
-            applyOrderingAndRender();
-        }
+        if(s > 0 && e >= s) { isCloudMode = false; activeBlocks = []; currentFilteredBase = fullDb.filter(q => q.id >= s && q.id <= e); applyAndRender(); }
     };
     document.getElementById('btn-apply-ids').onclick = () => {
-        const val = document.getElementById('specific-ids').value;
-        const ids = val.split(',').map(v => parseInt(v.trim())).filter(n => !isNaN(n));
-        if(ids.length > 0) {
-            isCloudMode = false; activeBlocks = []; 
-            currentFilteredBase = fullDb.filter(q => ids.includes(q.id));
-            applyOrderingAndRender();
-        }
+        const ids = document.getElementById('specific-ids').value.split(',').map(v => parseInt(v.trim())).filter(n => !isNaN(n));
+        if(ids.length > 0) { isCloudMode = false; activeBlocks = []; currentFilteredBase = fullDb.filter(q => ids.includes(q.id)); applyAndRender(); }
     };
 
-    function updateModeUI(type) {
-        if(type === 'q') {
-            document.getElementById('q-ord').classList.toggle('active', modeQ === 'ordered');
-            document.getElementById('q-rand').classList.toggle('active', modeQ === 'random');
-        } else {
-            document.getElementById('a-ord').classList.toggle('active', modeA === 'ordered');
-            document.getElementById('a-rand').classList.toggle('active', modeA === 'random');
-        }
+    function updateUI(type) {
+        if(type === 'q') { document.getElementById('q-ord').classList.toggle('active', modeQ === 'ordered'); document.getElementById('q-rand').classList.toggle('active', modeQ === 'random'); }
+        else { document.getElementById('a-ord').classList.toggle('active', modeA === 'ordered'); document.getElementById('a-rand').classList.toggle('active', modeA === 'random'); }
     }
 
     function regenerateQuiz() {
-        if(isCloudMode) {
-            currentFilteredBase = fullDb.filter(q => cloudErrorIds.has(q.id));
-        } else {
-            currentFilteredBase = [];
-            activeBlocks.forEach(b => {
-                const start = (b-1)*BLOCK_SIZE;
-                currentFilteredBase = currentFilteredBase.concat(fullDb.slice(start, start + BLOCK_SIZE));
-            });
-        }
-        applyOrderingAndRender();
+        if(isCloudMode) { currentFilteredBase = fullDb.filter(q => cloudErrorIds.has(q.id)); }
+        else { currentFilteredBase = []; activeBlocks.forEach(b => { currentFilteredBase = currentFilteredBase.concat(fullDb.slice((b-1)*BLOCK_SIZE, b*BLOCK_SIZE)); }); }
+        applyAndRender();
     }
 
-    function applyOrderingAndRender() {
-        resetInternalStats(); // Reset automatico dei punti ad ogni cambio
+    function applyAndRender() {
+        resetInternalStats();
         let processed = JSON.parse(JSON.stringify(currentFilteredBase));
-        
-        if(modeQ === 'random') {
-            processed.sort(() => Math.random() - 0.5);
-        }
-        
+        if(modeQ === 'random') processed.sort(() => Math.random() - 0.5);
         if(modeA === 'random') {
             processed.forEach(q => {
                 let mapping = q.options.map((text, i) => ({ text, i }));
@@ -316,12 +258,13 @@
         const container = document.getElementById('quiz-container');
         container.innerHTML = '';
         document.getElementById('total-visible').innerText = list.length;
-        
+        document.getElementById('quiz-range-label').innerText = `(1-${fullDb.length})`;
+        document.getElementById('progress-pill').style.display = list.length > 0 ? 'flex' : 'none';
+
         list.forEach(q => {
             const div = document.createElement('div');
             div.className = 'question-block'; div.id = `q-${q.id}`;
-            const count = cloudErrorCounts[String(q.id)] || 0;
-            
+            const count = cloudErrorCounts[q.id] || 0;
             div.innerHTML = `
                 <div class="q-text"><span class="q-badge">#${q.id}</span>&nbsp;&nbsp;${q.q}</div>
                 <div class="options"></div>
@@ -330,7 +273,6 @@
                     ${isCloudMode ? `<button class="btn-action" style="padding:4px 8px; font-size:0.8rem; margin-left:auto; background:var(--warning-color); color:black;" onclick="window.manualRemoveCloud(${q.id})">Rimuovi</button>` : ''}
                 </div>
             `;
-            
             q.options.forEach((opt, i) => {
                 const btn = document.createElement('div');
                 btn.className = 'option-label'; btn.innerText = opt;
@@ -367,7 +309,9 @@
         document.getElementById('score').innerText = score;
         document.getElementById('errors').innerText = errors;
         const total = parseInt(document.getElementById('total-visible').innerText) || 1;
+        const percent = Math.round(((score + errors) / total) * 100); // Progresso basato su domande completate (giuste + sbagliate)
         document.getElementById('grade').innerText = ((score / total) * 30).toFixed(1);
+        document.getElementById('progress-percent').innerText = percent + '%';
     }
 
     loadQuestions();
