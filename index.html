@@ -266,48 +266,38 @@
             return;
         }
 
-        // Resetta i dati della sessione attuale per l'esame
-        score = 0; errors = 0; attempted.clear(); questionsWithErrors.clear();
-        document.getElementById('score').innerText = 0;
-        document.getElementById('errors').innerText = 0;
-        document.getElementById('grade').innerText = "0.0";
-        document.getElementById('error-list').innerHTML = '';
-        document.getElementById('error-panel').style.display = 'none';
+        // 1. Resetta le statistiche interne della sessione
+        resetInternalStats();
 
-        // Disattiva gli altri stati visivi dei filtri
+        // 2. Disattiva le modalità cloud e pulisce la selezione dei blocchi
         isCloudMode = false;
-        useCustomRange = false;
-        useSpecificSelection = false;
-        resetFiltersUI();
+        activeBlocks = [];
         
-        // Rimuove l'active dai bottoni cloud se presenti
-        btnCloud.classList.remove('active');
-        const btnWorst = document.getElementById('btn-cloud-worst');
-        if (btnWorst) btnWorst.classList.remove('active');
-        
-        // Evidenzia visivamente il tasto simulazione (opzionale)
-        document.getElementById('btn-exam-sim').style.border = "2px solid #fff";
+        // Rimuove l'aspetto visivo di selezione dai filtri dei blocchi
+        document.querySelectorAll('#filter-buttons-container .btn-block').forEach(b => b.classList.remove('active'));
 
-        // Clona l'intero database per mescolarlo
+        // 3. Estrae 40 domande casuali dal database principale
         let shuffleDb = JSON.parse(JSON.stringify(fullDb));
         shuffleDb.sort(() => Math.random() - 0.5);
+        currentFilteredBase = shuffleDb.slice(0, 40);
 
-        // Prende le prime 40 domande estratte
-        currentQuizSet = shuffleDb.slice(0, 40);
-
-        // Se la modalità risposte random è attiva, mescola anche le risposte
+        // 4. Applica il mix delle risposte se la modalità casuale è attiva
         if (modeA === 'random') {
-            currentQuizSet.forEach(q => {
-                let optsIdx = q.options.map((o, idx) => ({ t: o, orig: idx }));
-                optsIdx.sort(() => Math.random() - 0.5);
-                q.options = optsIdx.map(o => o.t);
-                q.correct = optsIdx.findIndex(o => o.orig === q.correct);
+            currentFilteredBase.forEach(q => {
+                let mapping = q.options.map((text, i) => ({ text, i }));
+                mapping.sort(() => Math.random() - 0.5);
+                q.options = mapping.map(m => m.text);
+                // q.correct supporta indici multipli in questa versione del codice
+                q.correct = q.correct.map(oldIdx => mapping.findIndex(m => m.i === oldIdx));
             });
         }
 
-        // Mostra le domande a schermo
-        renderQuestions();
-    }
+        // 5. Invia le 40 domande estratte al motore di rendering corretto
+        renderList(currentFilteredBase);
+
+        // Applica un feedback visivo al bottone esame
+        document.getElementById('btn-exam-sim').style.outline = "2px solid #fff";
+    };
 
     function renderList(list) {
         const container = document.getElementById('quiz-container');
