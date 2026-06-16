@@ -79,6 +79,9 @@
                 <button class="btn-mode active" id="a-ord">ABC</button>
                 <button class="btn-mode" id="a-rand">🔀 Mix</button>
             </div>
+            <button id="btn-exam-sim" class="btn-mode" style="background-color: #2980b9; color: white; width: 100%; padding: 12px;" onclick="window.startExamSimulation()">
+                🎓 Avvia Simulazione Esame (40 Domande)
+            </button>
         </div>
     </div>
 
@@ -252,6 +255,58 @@
             });
         }
         renderList(processed);
+    }
+    window.startExamSimulation = function() {
+        if (fullDb.length === 0) {
+            alert("Il database delle domande non è ancora pronto!");
+            return;
+        }
+
+        if (!confirm("Vuoi avviare una nuova simulazione d'esame? I progressi della sessione corrente verranno azzerati.")) {
+            return;
+        }
+
+        // Resetta i dati della sessione attuale per l'esame
+        score = 0; errors = 0; attempted.clear(); questionsWithErrors.clear();
+        document.getElementById('score').innerText = 0;
+        document.getElementById('errors').innerText = 0;
+        document.getElementById('grade').innerText = "0.0";
+        document.getElementById('error-list').innerHTML = '';
+        document.getElementById('error-panel').style.display = 'none';
+
+        // Disattiva gli altri stati visivi dei filtri
+        isCloudMode = false;
+        useCustomRange = false;
+        useSpecificSelection = false;
+        resetFiltersUI();
+        
+        // Rimuove l'active dai bottoni cloud se presenti
+        btnCloud.classList.remove('active');
+        const btnWorst = document.getElementById('btn-cloud-worst');
+        if (btnWorst) btnWorst.classList.remove('active');
+        
+        // Evidenzia visivamente il tasto simulazione (opzionale)
+        document.getElementById('btn-exam-sim').style.border = "2px solid #fff";
+
+        // Clona l'intero database per mescolarlo
+        let shuffleDb = JSON.parse(JSON.stringify(fullDb));
+        shuffleDb.sort(() => Math.random() - 0.5);
+
+        // Prende le prime 40 domande estratte
+        currentQuizSet = shuffleDb.slice(0, 40);
+
+        // Se la modalità risposte random è attiva, mescola anche le risposte
+        if (modeA === 'random') {
+            currentQuizSet.forEach(q => {
+                let optsIdx = q.options.map((o, idx) => ({ t: o, orig: idx }));
+                optsIdx.sort(() => Math.random() - 0.5);
+                q.options = optsIdx.map(o => o.t);
+                q.correct = optsIdx.findIndex(o => o.orig === q.correct);
+            });
+        }
+
+        // Mostra le domande a schermo
+        renderQuestions();
     }
 
     function renderList(list) {
